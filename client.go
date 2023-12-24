@@ -3,7 +3,6 @@ package gojsonclient
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/blizzy78/gobackoff"
+	"github.com/go-json-experiment/json"
 )
 
 // Client is a client for JSON/REST HTTP services.
@@ -179,11 +179,11 @@ func NewRequest[Req any, Res any](client *Client, uri string, method string, req
 		req:    req,
 
 		marshalRequestFunc: func(writer io.Writer, val Req) error {
-			return json.NewEncoder(writer).Encode(val) //nolint:wrapcheck // we don't add new info here
+			return json.MarshalWrite(writer, val) //nolint:wrapcheck // we don't add new info here
 		},
 
 		unmarshalResponseFunc: func(httpRes *http.Response, val *Res) error {
-			return json.NewDecoder(httpRes.Body).Decode(val) //nolint:wrapcheck // we don't add new info here
+			return json.UnmarshalRead(httpRes.Body, val) //nolint:wrapcheck // we don't add new info here
 		},
 	}
 

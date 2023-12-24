@@ -2,7 +2,6 @@ package gojsonclient
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/blizzy78/gobackoff"
+	"github.com/go-json-experiment/json"
 	"github.com/matryer/is"
 )
 
@@ -36,7 +36,7 @@ func TestDo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		is.Equal(req.URL.Path, "/foo")
 
-		_ = json.NewEncoder(writer).Encode(&resData)
+		_ = json.MarshalWrite(writer, &resData)
 	}))
 
 	defer server.Close()
@@ -146,7 +146,7 @@ func TestWithBaseURI(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		is.Equal(req.URL.Path, "/foo")
 
-		_ = json.NewEncoder(writer).Encode(&resData)
+		_ = json.MarshalWrite(writer, &resData)
 	}))
 
 	defer server.Close()

@@ -2,10 +2,11 @@ package gojsonclient
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+
+	"github.com/go-json-experiment/json"
 )
 
 func Example() {
@@ -19,9 +20,9 @@ func Example() {
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, httpReq *http.Request) {
 		var req *request
-		_ = json.NewDecoder(httpReq.Body).Decode(&req)
+		_ = json.UnmarshalRead(httpReq.Body, &req)
 
-		_ = json.NewEncoder(writer).Encode(&response{
+		_ = json.MarshalWrite(writer, &response{
 			Reply: "Hello " + req.Message + "!",
 		})
 	}))
