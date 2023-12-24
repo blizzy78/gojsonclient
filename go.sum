@@ -1,0 +1,4 @@
+github.com/blizzy78/gobackoff v0.1.0 h1:UtKLVphYHwPmXgzT/FKKKe+i8mA6pjOV9oBAPLeWq5k=
+github.com/blizzy78/gobackoff v0.1.0/go.mod h1:6Zn9hKAy29C9XmOBYywiMGkGMIUZ1/V7EGhsyfSxLNQ=
+github.com/matryer/is v1.4.1 h1:55ehd8zaGABKLXQUe2awZ99BD/PTc2ls+KV/dXphgEQ=
+github.com/matryer/is v1.4.1/go.mod h1:8I/i5uYgLzgsgEloJE1U6xx5HkBQpAZvepWuujKwMRU=
