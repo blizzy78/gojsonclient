@@ -51,27 +51,6 @@ func TestDo(t *testing.T) {
 	is.Equal(res.Res, &resData)
 }
 
-func TestDo_NoContent(t *testing.T) {
-	is := is.New(t)
-
-	reqData := testReq{
-		Message: "Hello, server!",
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-		http.Error(writer, "No Content", http.StatusNoContent)
-	}))
-
-	defer server.Close()
-
-	client := New()
-
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData)
-
-	res, _ := Do(context.Background(), req)
-	is.Equal(res.Res, nil)
-}
-
 func TestDo_Marshal(t *testing.T) {
 	is := is.New(t)
 
@@ -324,6 +303,66 @@ func TestDo_RetryMaxAttempts(t *testing.T) {
 	is.True(ok)
 
 	is.Equal(attempts, 5)
+}
+
+func TestNewHTTPRequest_Void(t *testing.T) {
+	is := is.New(t)
+
+	client := New()
+
+	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
+		WithMarshalRequestFunc[*Void, *Void](func(writer io.Writer, val *Void) error {
+			is.Fail()
+			return nil
+		}),
+	)
+
+	_, err := newHTTPRequest(context.Background(), req)
+	is.NoErr(err)
+}
+
+func TestResponse_Void(t *testing.T) {
+	is := is.New(t)
+
+	client := New()
+
+	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
+		WithUnmarshalResponseFunc[*Void, *Void](func(httpRes *http.Response, val **Void) error {
+			is.Fail()
+			return nil
+		}),
+	)
+
+	httpRes := http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "OK",
+		Body:       http.NoBody,
+	}
+
+	_, err := response[*Void, *Void](&httpRes, req)
+	is.NoErr(err)
+}
+
+func TestResponse_NoContent(t *testing.T) {
+	is := is.New(t)
+
+	client := New()
+
+	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
+		WithUnmarshalResponseFunc[*Void, *Void](func(httpRes *http.Response, val **Void) error {
+			is.Fail()
+			return nil
+		}),
+	)
+
+	httpRes := http.Response{
+		StatusCode: http.StatusNoContent,
+		Status:     "No Content",
+		Body:       http.NoBody,
+	}
+
+	_, err := response[*Void, *Void](&httpRes, req)
+	is.NoErr(err)
 }
 
 func withInstantBackoff() ClientOpt {

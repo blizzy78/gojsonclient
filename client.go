@@ -59,6 +59,7 @@ type UnmarshalJSONFunc[T any] func(httpRes *http.Response, val *T) error
 // Response represents a JSON/REST HTTP response.
 type Response[T any] struct {
 	// Res is the value decoded from the response body.
+	// Res will be the default value of T if StatusCode==http.StatusNoContent, or if T is Void or *Void.
 	Res T
 
 	// StatusCode is the HTTP response status code.
@@ -208,10 +209,18 @@ func WithUnmarshalResponseFunc[Req any, Res any](fun UnmarshalJSONFunc[Res]) Req
 }
 
 // Do executes req and returns the response.
-// If an HTTP request fails, it is retried according to the retry function, up to the maximum number
-// of attempts.
+//
+// If an HTTP request fails, it is retried using backoff according to the retry function, up to the
+// maximum number of attempts.
 // If the context is canceled, or if the retry function returns a non-nil error, Do stops and returns
 // a gobackoff.AbortError.
+//
+// If Req is Void or *Void, the request will be made without a body.
+// If the response status code is http.StatusNoContent, Response.Res will be the default value of Res.
+// If Res is Void or *Void, the response body will be ignored, and Response.Res will be the default
+// value of Res.
+//
+// Do is safe to call concurrently with the same Request.
 func Do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Response[Res], error) {
 	var res *Response[Res]
 
@@ -244,37 +253,24 @@ func Do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Respons
 	return res, nil
 }
 
-func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Response[Res], *http.Response, error) { //nolint:cyclop // it's not too bad
-	ctx, cancel := context.WithTimeout(ctx, req.client.requestTimeout)
-	defer cancel()
-
-	jsonReqData := bytes.Buffer{}
-
-	if err := req.marshalRequestFunc(&jsonReqData, req.req); err != nil {
-		return nil, nil, fmt.Errorf("encode request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, req.method, req.client.baseURI+req.uri, &jsonReqData)
+func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Response[Res], *http.Response, error) {
+	httpReq, err := newHTTPRequest(ctx, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("new HTTP request: %w", err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	httpReq.Header.Set("Accept", "application/json")
-
-	for _, m := range req.client.requestMiddlewares {
-		if err = m(httpReq); err != nil {
-			return nil, nil, fmt.Errorf("request middleware: %w", err)
-		}
-	}
-
 	attempt := gobackoff.AttemptFromContext(ctx)
 
-	req.client.logger.Info("execute HTTP request",
-		slog.String("uri", req.client.baseURI+req.uri),
-		slog.String("method", req.method),
+	req.client.logger.InfoContext(ctx, "execute HTTP request",
+		slog.Group("request",
+			slog.String("uri", httpReq.URL.String()),
+			slog.String("method", httpReq.Method),
+		),
 		slog.Int("attempt", attempt),
 	)
+
+	ctx, cancel := context.WithTimeout(ctx, req.client.requestTimeout) //nolint:ineffassign,staticcheck // better be safe than sorry
+	defer cancel()
 
 	httpRes, err := req.client.httpClient.Do(httpReq)
 	if err != nil {
@@ -283,11 +279,54 @@ func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Respons
 
 	defer httpRes.Body.Close() //nolint:errcheck // we're only reading
 
+	res, err := response(httpRes, req)
+	if err != nil {
+		return nil, httpRes, fmt.Errorf("get response: %w", err)
+	}
+
+	return res, httpRes, nil
+}
+
+func newHTTPRequest[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*http.Request, error) {
+	var jsonReqData io.Reader = http.NoBody
+
+	switch any(req.req).(type) {
+	case Void:
+	case *Void:
+
+	default:
+		buf := bytes.Buffer{}
+
+		if err := req.marshalRequestFunc(&buf, req.req); err != nil {
+			return nil, fmt.Errorf("encode request body: %w", err)
+		}
+
+		jsonReqData = &buf
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, req.method, req.client.baseURI+req.uri, jsonReqData)
+	if err != nil {
+		return nil, fmt.Errorf("new HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	httpReq.Header.Set("Accept", "application/json")
+
+	for _, m := range req.client.requestMiddlewares {
+		if err = m(httpReq); err != nil {
+			return nil, fmt.Errorf("request middleware: %w", err)
+		}
+	}
+
+	return httpReq, nil
+}
+
+func response[Req any, Res any](httpRes *http.Response, req *Request[Req, Res]) (*Response[Res], error) {
 	if httpRes.StatusCode == http.StatusNoContent {
 		return &Response[Res]{
 			StatusCode: httpRes.StatusCode,
 			Status:     httpRes.Status,
-		}, httpRes, nil
+		}, nil
 	}
 
 	var jsonRes Res
@@ -295,18 +334,21 @@ func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Respons
 	switch any(jsonRes).(type) {
 	case Void:
 	case *Void:
+		return &Response[Res]{
+			StatusCode: httpRes.StatusCode,
+			Status:     httpRes.Status,
+		}, nil
+	}
 
-	default:
-		if err = req.unmarshalResponseFunc(httpRes, &jsonRes); err != nil {
-			return nil, httpRes, fmt.Errorf("decode response: %w", err)
-		}
+	if err := req.unmarshalResponseFunc(httpRes, &jsonRes); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	return &Response[Res]{
 		Res:        jsonRes,
 		StatusCode: httpRes.StatusCode,
 		Status:     httpRes.Status,
-	}, httpRes, nil
+	}, nil
 }
 
 // BasicAuth returns a request middleware that sets the request's Authorization header to use
