@@ -1,13 +1,6 @@
 name: Lint
 
-on:
-  push:
-    tags:
-      - v*
-    branches:
-      - master
-
-  pull_request:
+on: [push, pull_request]
 
 permissions:
   contents: read
@@ -31,3 +24,6 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
+
+      - name: consistent
+        run: go run github.com/blizzy78/consistent/cmd/consistent@latest ./...
