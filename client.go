@@ -127,10 +127,10 @@ func WithBaseURI(baseURI string) ClientOpt {
 }
 
 // WithRequestMiddleware configures a Client to use fun as a request middleware.
-// Any number of request middlewares can be added.
+// Any number of request middlewares may be added.
 func WithRequestMiddleware(fun RequestMiddlewareFunc) ClientOpt {
 	return func(client *Client) {
-		client.requestMiddlewares = append(client.requestMiddlewares, fun)
+		client.Use(fun)
 	}
 }
 
@@ -168,6 +168,14 @@ func WithBackoff(backoff *gobackoff.Backoff) ClientOpt {
 	return func(client *Client) {
 		client.backoff = backoff
 	}
+}
+
+// Use configures c to use fun as a request middleware. Any number of request middlewares may be added.
+//
+// A Client should usually be configured using WithRequestMiddleware, but it may sometimes be necessary to add new
+// middlewares after the Client has been created.
+func (c *Client) Use(fun RequestMiddlewareFunc) {
+	c.requestMiddlewares = append(c.requestMiddlewares, fun)
 }
 
 // NewRequest creates a new Request with the given client, URI, method, request data, and options.
