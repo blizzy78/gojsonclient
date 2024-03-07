@@ -90,7 +90,7 @@ func TestDo_Unmarshal(t *testing.T) {
 		Reply: "Hello, client!",
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		_, _ = writer.Write([]byte(resData.Reply))
 	}))
 
@@ -99,7 +99,7 @@ func TestDo_Unmarshal(t *testing.T) {
 	client := New()
 
 	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData,
-		WithUnmarshalResponseFunc[*testReq, *testRes](func(httpRes *http.Response, val **testRes) error {
+		WithUnmarshalResponseFunc[*testReq, *testRes](func(httpRes *http.Response, _ **testRes) error {
 			data, _ := io.ReadAll(httpRes.Body)
 			is.Equal(string(data), resData.Reply)
 
@@ -167,7 +167,7 @@ func TestDo_Retry(t *testing.T) {
 
 	attempts := 0
 
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		attempts++
 
 		if attempts == 1 {
@@ -199,7 +199,7 @@ func TestDo_RetryFunc(t *testing.T) {
 
 	attempts := 0
 
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		attempts++
 
 		if attempts == 1 {
@@ -215,7 +215,7 @@ func TestDo_RetryFunc(t *testing.T) {
 	client := New(
 		withInstantBackoff(),
 
-		WithRetry(func(_ context.Context, httpRes *http.Response, _ error) error {
+		WithRetry(func(_ context.Context, _ *http.Response, _ error) error {
 			return nil
 		}),
 	)
@@ -237,7 +237,7 @@ func TestDo_RetryFunc_Abort(t *testing.T) {
 
 	attempts := 0
 
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		attempts++
 
 		if attempts == 1 {
@@ -282,7 +282,7 @@ func TestDo_RetryMaxAttempts(t *testing.T) {
 
 	attempts := 0
 
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		attempts++
 
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
@@ -311,7 +311,7 @@ func TestNewHTTPRequest_Void(t *testing.T) {
 	client := New()
 
 	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
-		WithMarshalRequestFunc[*Void, *Void](func(writer io.Writer, val *Void) error {
+		WithMarshalRequestFunc[*Void, *Void](func(_ io.Writer, _ *Void) error {
 			is.Fail()
 			return nil
 		}),
@@ -327,7 +327,7 @@ func TestResponse_Void(t *testing.T) {
 	client := New()
 
 	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
-		WithUnmarshalResponseFunc[*Void, *Void](func(httpRes *http.Response, val **Void) error {
+		WithUnmarshalResponseFunc[*Void, *Void](func(_ *http.Response, _ **Void) error {
 			is.Fail()
 			return nil
 		}),
@@ -349,7 +349,7 @@ func TestResponse_NoContent(t *testing.T) {
 	client := New()
 
 	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
-		WithUnmarshalResponseFunc[*Void, *Void](func(httpRes *http.Response, val **Void) error {
+		WithUnmarshalResponseFunc[*Void, *Void](func(_ *http.Response, _ **Void) error {
 			is.Fail()
 			return nil
 		}),
