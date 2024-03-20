@@ -43,9 +43,9 @@ func TestDo(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*testReq, *testRes](client, server.URL+"/foo", http.MethodGet, &reqData)
+	req := NewRequest[*testReq, *testRes](server.URL+"/foo", http.MethodGet, &reqData)
 
-	res, err := Do(context.Background(), req)
+	res, err := Do(context.Background(), client, req)
 	is.NoErr(err)
 
 	is.Equal(res.Res, &resData)
@@ -69,14 +69,14 @@ func TestDo_Marshal(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData,
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData,
 		WithMarshalRequestFunc[*testReq, *testRes](func(writer io.Writer, val *testReq) error {
 			_, err := writer.Write([]byte(val.Message))
 			return err //nolint:wrapcheck // we don't add new info here
 		}),
 	)
 
-	_, _ = Do(context.Background(), req)
+	_, _ = Do(context.Background(), client, req)
 }
 
 func TestDo_Unmarshal(t *testing.T) {
@@ -98,7 +98,7 @@ func TestDo_Unmarshal(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData,
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData,
 		WithUnmarshalResponseFunc[*testReq, *testRes](func(httpRes *http.Response, _ **testRes) error {
 			data, _ := io.ReadAll(httpRes.Body)
 			is.Equal(string(data), resData.Reply)
@@ -107,7 +107,7 @@ func TestDo_Unmarshal(t *testing.T) {
 		}),
 	)
 
-	_, _ = Do(context.Background(), req)
+	_, _ = Do(context.Background(), client, req)
 }
 
 func TestDo_Method(t *testing.T) {
@@ -127,9 +127,9 @@ func TestDo_Method(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodPost, &reqData)
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodPost, &reqData)
 
-	_, _ = Do(context.Background(), req)
+	_, _ = Do(context.Background(), client, req)
 }
 
 func TestWithBaseURI(t *testing.T) {
@@ -153,9 +153,9 @@ func TestWithBaseURI(t *testing.T) {
 
 	client := New(WithBaseURI(server.URL))
 
-	req := NewRequest[*testReq, *testRes](client, "/foo", http.MethodGet, &reqData)
+	req := NewRequest[*testReq, *testRes]("/foo", http.MethodGet, &reqData)
 
-	_, _ = Do(context.Background(), req)
+	_, _ = Do(context.Background(), client, req)
 }
 
 func TestDo_Retry(t *testing.T) {
@@ -182,9 +182,9 @@ func TestDo_Retry(t *testing.T) {
 
 	client := New(withInstantBackoff())
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData)
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData)
 
-	_, err := Do(context.Background(), req)
+	_, err := Do(context.Background(), client, req)
 	is.NoErr(err)
 
 	is.Equal(attempts, 2)
@@ -220,9 +220,9 @@ func TestDo_RetryFunc(t *testing.T) {
 		}),
 	)
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData)
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData)
 
-	_, err := Do(context.Background(), req)
+	_, err := Do(context.Background(), client, req)
 	is.NoErr(err)
 
 	is.Equal(attempts, 2)
@@ -264,9 +264,9 @@ func TestDo_RetryFunc_Abort(t *testing.T) {
 		}),
 	)
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData)
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData)
 
-	_, err := Do(context.Background(), req)
+	_, err := Do(context.Background(), client, req)
 
 	abortErr, ok := err.(*gobackoff.AbortError) //nolint:errorlint // must be *gobackoff.AbortError
 	is.True(ok)
@@ -295,9 +295,9 @@ func TestDo_RetryMaxAttempts(t *testing.T) {
 		WithMaxAttempts(5),
 	)
 
-	req := NewRequest[*testReq, *testRes](client, server.URL, http.MethodGet, &reqData)
+	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData)
 
-	_, err := Do(context.Background(), req)
+	_, err := Do(context.Background(), client, req)
 
 	_, ok := err.(*gobackoff.MaxAttemptsError) //nolint:errorlint // must be *gobackoff.MaxAttemptsError
 	is.True(ok)
@@ -310,23 +310,21 @@ func TestNewHTTPRequest_Void(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
+	req := NewRequest[*Void, *Void]("", http.MethodGet, nil,
 		WithMarshalRequestFunc[*Void, *Void](func(_ io.Writer, _ *Void) error {
 			is.Fail()
 			return nil
 		}),
 	)
 
-	_, err := newHTTPRequest(context.Background(), req)
+	_, err := newHTTPRequest(context.Background(), client, req)
 	is.NoErr(err)
 }
 
 func TestResponse_Void(t *testing.T) {
 	is := is.New(t)
 
-	client := New()
-
-	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
+	req := NewRequest[*Void, *Void]("", http.MethodGet, nil,
 		WithUnmarshalResponseFunc[*Void, *Void](func(_ *http.Response, _ **Void) error {
 			is.Fail()
 			return nil
@@ -346,9 +344,7 @@ func TestResponse_Void(t *testing.T) {
 func TestResponse_NoContent(t *testing.T) {
 	is := is.New(t)
 
-	client := New()
-
-	req := NewRequest[*Void, *Void](client, "", http.MethodGet, nil,
+	req := NewRequest[*Void, *Void]("", http.MethodGet, nil,
 		WithUnmarshalResponseFunc[*Void, *Void](func(_ *http.Response, _ **Void) error {
 			is.Fail()
 			return nil

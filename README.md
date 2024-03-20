@@ -23,24 +23,13 @@ type response struct {
 	Reply string `json:"reply"`
 }
 
-server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, httpReq *http.Request) {
-	var req *request
-	_ = json.UnmarshalRead(httpReq.Body, &req)
-
-	_ = json.MarshalWrite(writer, &response{
-		Reply: "Hello " + req.Message + "!",
-	})
-}))
-
-defer server.Close()
-
 client := New()
 
-req := NewRequest[*request, *response](client, server.URL+"/foo", http.MethodGet, &request{
+req := NewRequest[*request, *response]("https://www.example.com", http.MethodGet, &request{
 	Message: "client",
 })
 
-res, _ := Do(context.Background(), req)
+res, _ := Do(context.Background(), client, req)
 fmt.Println(res.Res.Reply)
 
 // Output: Hello client!

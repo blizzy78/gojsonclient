@@ -39,12 +39,11 @@ type RetryFunc func(ctx context.Context, httpRes *http.Response, err error) erro
 
 // Request represents a JSON/REST HTTP request.
 type Request[Req any, Res any] struct {
-	client                *Client
-	uri                   string
-	method                string
-	req                   Req
-	marshalRequestFunc    MarshalJSONFunc[Req]
-	unmarshalResponseFunc UnmarshalJSONFunc[Res]
+	uri               string
+	method            string
+	req               Req
+	marshalRequest    MarshalJSONFunc[Req]
+	unmarshalResponse UnmarshalJSONFunc[Res]
 }
 
 // RequestOpt is a function that configures a Request.
@@ -179,19 +178,18 @@ func (c *Client) Use(fun RequestMiddlewareFunc) {
 }
 
 // NewRequest creates a new Request with the given client, URI, method, request data, and options.
-func NewRequest[Req any, Res any](client *Client, uri string, method string, req Req, opts ...RequestOpt[Req, Res]) *Request[Req, Res] {
+func NewRequest[Req any, Res any](uri string, method string, req Req, opts ...RequestOpt[Req, Res]) *Request[Req, Res] {
 	request := Request[Req, Res]{
-		client: client,
 		uri:    uri,
 		method: method,
 		req:    req,
 
-		marshalRequestFunc: func(writer io.Writer, val Req) error {
-			return json.MarshalWrite(writer, val) //nolint:wrapcheck // we don't add new info here
+		marshalRequest: func(writer io.Writer, val Req) error {
+			return json.MarshalWrite(writer, val)
 		},
 
-		unmarshalResponseFunc: func(httpRes *http.Response, val *Res) error {
-			return json.UnmarshalRead(httpRes.Body, val) //nolint:wrapcheck // we don't add new info here
+		unmarshalResponse: func(httpRes *http.Response, val *Res) error {
+			return json.UnmarshalRead(httpRes.Body, val)
 		},
 	}
 
@@ -205,14 +203,14 @@ func NewRequest[Req any, Res any](client *Client, uri string, method string, req
 // WithMarshalRequestFunc configures a Request to use fun as the marshal function.
 func WithMarshalRequestFunc[Req any, Res any](fun MarshalJSONFunc[Req]) RequestOpt[Req, Res] {
 	return func(req *Request[Req, Res]) {
-		req.marshalRequestFunc = fun
+		req.marshalRequest = fun
 	}
 }
 
 // WithUnmarshalResponseFunc configures a Request to use fun as the unmarshal function.
 func WithUnmarshalResponseFunc[Req any, Res any](fun UnmarshalJSONFunc[Res]) RequestOpt[Req, Res] {
 	return func(req *Request[Req, Res]) {
-		req.unmarshalResponseFunc = fun
+		req.unmarshalResponse = fun
 	}
 }
 
@@ -229,30 +227,30 @@ func WithUnmarshalResponseFunc[Req any, Res any](fun UnmarshalJSONFunc[Res]) Req
 // value of Res.
 //
 // Do is safe to call concurrently with the same Request.
-func Do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Response[Res], error) {
+func Do[Req any, Res any](ctx context.Context, client *Client, req *Request[Req, Res]) (*Response[Res], error) {
 	var res *Response[Res]
 
-	err := req.client.backoff.Do(ctx, func(ctx context.Context) error {
+	err := client.backoff.Do(ctx, func(ctx context.Context) error {
 		var (
 			httpRes *http.Response
 			err     error
 		)
 
-		res, httpRes, err = do(ctx, req) //nolint:bodyclose // body is already closed
+		res, httpRes, err = do(ctx, client, req) //nolint:bodyclose // body is already closed
 		if errors.Is(err, context.Canceled) {
 			return &gobackoff.AbortError{
 				Err: err,
 			}
 		}
 
-		if retryErr := req.client.retryFunc(ctx, httpRes, err); retryErr != nil {
+		if retryErr := client.retryFunc(ctx, httpRes, err); retryErr != nil {
 			return &gobackoff.AbortError{
 				Err: retryErr,
 			}
 		}
 
 		return err
-	}, req.client.maxAttempts)
+	}, client.maxAttempts)
 
 	if err != nil {
 		return nil, err //nolint:wrapcheck // we don't add new info here
@@ -261,15 +259,15 @@ func Do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Respons
 	return res, nil
 }
 
-func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Response[Res], *http.Response, error) {
-	httpReq, err := newHTTPRequest(ctx, req)
+func do[Req any, Res any](ctx context.Context, client *Client, req *Request[Req, Res]) (*Response[Res], *http.Response, error) {
+	httpReq, err := newHTTPRequest(ctx, client, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("new HTTP request: %w", err)
 	}
 
 	attempt := gobackoff.AttemptFromContext(ctx)
 
-	req.client.logger.InfoContext(ctx, "execute HTTP request",
+	client.logger.InfoContext(ctx, "execute HTTP request",
 		slog.Group("request",
 			slog.String("uri", httpReq.URL.String()),
 			slog.String("method", httpReq.Method),
@@ -277,10 +275,10 @@ func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Respons
 		slog.Int("attempt", attempt),
 	)
 
-	ctx, cancel := context.WithTimeout(ctx, req.client.requestTimeout) //nolint:ineffassign,staticcheck // better be safe than sorry
+	ctx, cancel := context.WithTimeout(ctx, client.requestTimeout) //nolint:ineffassign,staticcheck // better be safe than sorry
 	defer cancel()
 
-	httpRes, err := req.client.httpClient.Do(httpReq)
+	httpRes, err := client.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, httpRes, fmt.Errorf("execute HTTP request: %w", err)
 	}
@@ -295,7 +293,7 @@ func do[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*Respons
 	return res, httpRes, nil
 }
 
-func newHTTPRequest[Req any, Res any](ctx context.Context, req *Request[Req, Res]) (*http.Request, error) {
+func newHTTPRequest[Req any, Res any](ctx context.Context, client *Client, req *Request[Req, Res]) (*http.Request, error) {
 	var jsonReqData io.Reader = http.NoBody
 
 	switch any(req.req).(type) {
@@ -305,14 +303,14 @@ func newHTTPRequest[Req any, Res any](ctx context.Context, req *Request[Req, Res
 	default:
 		buf := bytes.Buffer{}
 
-		if err := req.marshalRequestFunc(&buf, req.req); err != nil {
+		if err := req.marshalRequest(&buf, req.req); err != nil {
 			return nil, fmt.Errorf("encode request body: %w", err)
 		}
 
 		jsonReqData = &buf
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, req.method, req.client.baseURI+req.uri, jsonReqData)
+	httpReq, err := http.NewRequestWithContext(ctx, req.method, client.baseURI+req.uri, jsonReqData)
 	if err != nil {
 		return nil, fmt.Errorf("new HTTP request: %w", err)
 	}
@@ -320,7 +318,7 @@ func newHTTPRequest[Req any, Res any](ctx context.Context, req *Request[Req, Res
 	httpReq.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	httpReq.Header.Set("Accept", "application/json")
 
-	for _, m := range req.client.requestMiddlewares {
+	for _, m := range client.requestMiddlewares {
 		if err = m(httpReq); err != nil {
 			return nil, fmt.Errorf("request middleware: %w", err)
 		}
@@ -348,7 +346,7 @@ func response[Req any, Res any](httpRes *http.Response, req *Request[Req, Res]) 
 		}, nil
 	}
 
-	if err := req.unmarshalResponseFunc(httpRes, &jsonRes); err != nil {
+	if err := req.unmarshalResponse(httpRes, &jsonRes); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 

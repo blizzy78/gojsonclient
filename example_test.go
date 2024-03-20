@@ -31,11 +31,11 @@ func Example() {
 
 	client := New()
 
-	req := NewRequest[*request, *response](client, server.URL+"/foo", http.MethodGet, &request{
+	req := NewRequest[*request, *response](server.URL+"/foo", http.MethodGet, &request{
 		Message: "client",
 	})
 
-	res, _ := Do(context.Background(), req)
+	res, _ := Do(context.Background(), client, req)
 	fmt.Println(res.Res.Reply)
 
 	// Output: Hello client!
