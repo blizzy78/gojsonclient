@@ -69,7 +69,7 @@ func TestDo_Marshal(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData,
+	req := NewRequest(server.URL, http.MethodGet, &reqData,
 		WithMarshalRequestFunc[*testReq, *testRes](func(writer io.Writer, val *testReq) error {
 			_, err := writer.Write([]byte(val.Message))
 			return err //nolint:wrapcheck // we don't add new info here
@@ -98,8 +98,8 @@ func TestDo_Unmarshal(t *testing.T) {
 
 	client := New()
 
-	req := NewRequest[*testReq, *testRes](server.URL, http.MethodGet, &reqData,
-		WithUnmarshalResponseFunc[*testReq, *testRes](func(httpRes *http.Response, _ **testRes) error {
+	req := NewRequest(server.URL, http.MethodGet, &reqData,
+		WithUnmarshalResponseFunc[*testReq](func(httpRes *http.Response, _ **testRes) error {
 			data, _ := io.ReadAll(httpRes.Body)
 			is.Equal(string(data), resData.Reply)
 
@@ -305,13 +305,13 @@ func TestDo_RetryMaxAttempts(t *testing.T) {
 	is.Equal(attempts, 5)
 }
 
-func TestNewHTTPRequest_Void(t *testing.T) {
+func TestNewHTTPRequest_NoBody(t *testing.T) {
 	is := is.New(t)
 
 	client := New()
 
-	req := NewRequest[*Void, *Void]("", http.MethodGet, nil,
-		WithMarshalRequestFunc[*Void, *Void](func(_ io.Writer, _ *Void) error {
+	req := NewRequest("", http.MethodGet, nil,
+		WithMarshalRequestFunc[any, any](func(_ io.Writer, _ any) error {
 			is.Fail()
 			return nil
 		}),
@@ -321,11 +321,13 @@ func TestNewHTTPRequest_Void(t *testing.T) {
 	is.NoErr(err)
 }
 
-func TestResponse_Void(t *testing.T) {
+func TestResponse_IgnoreBody(t *testing.T) {
 	is := is.New(t)
 
-	req := NewRequest[*Void, *Void]("", http.MethodGet, nil,
-		WithUnmarshalResponseFunc[*Void, *Void](func(_ *http.Response, _ **Void) error {
+	req := NewRequest("", http.MethodGet, nil,
+		WithIgnoreResponseBody[any, any](),
+
+		WithUnmarshalResponseFunc[any](func(_ *http.Response, _ *any) error {
 			is.Fail()
 			return nil
 		}),
@@ -337,15 +339,15 @@ func TestResponse_Void(t *testing.T) {
 		Body:       http.NoBody,
 	}
 
-	_, err := response[*Void, *Void](&httpRes, req)
+	_, err := response(&httpRes, req)
 	is.NoErr(err)
 }
 
 func TestResponse_NoContent(t *testing.T) {
 	is := is.New(t)
 
-	req := NewRequest[*Void, *Void]("", http.MethodGet, nil,
-		WithUnmarshalResponseFunc[*Void, *Void](func(_ *http.Response, _ **Void) error {
+	req := NewRequest("", http.MethodGet, nil,
+		WithUnmarshalResponseFunc[any](func(_ *http.Response, _ *any) error {
 			is.Fail()
 			return nil
 		}),
@@ -357,7 +359,7 @@ func TestResponse_NoContent(t *testing.T) {
 		Body:       http.NoBody,
 	}
 
-	_, err := response[*Void, *Void](&httpRes, req)
+	_, err := response(&httpRes, req)
 	is.NoErr(err)
 }
 

@@ -4,7 +4,7 @@
 gojsonclient
 ============
 
-A Go package that provides a client for JSON/REST HTTP services.
+A Go package that provides a client for JSON/REST HTTP services, with automatic retry/backoff.
 
 ```go
 import "github.com/blizzy78/gojsonclient"
