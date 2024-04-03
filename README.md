@@ -23,13 +23,15 @@ type response struct {
 	Reply string `json:"reply"`
 }
 
-client := New()
+client := gojsonclient.New()
 
-req := NewRequest[*request, *response]("https://www.example.com", http.MethodGet, &request{
-	Message: "client",
-})
+req := gojsonclient.NewRequest[*request, *response](
+	"https://www.example.com",
+	http.MethodGet,
+	&request{Message: "client"},
+)
 
-res, _ := Do(context.Background(), client, req)
+res, _ := gojsonclient.Do(context.Background(), client, req)
 fmt.Println(res.Res.Reply)
 
 // Output: Hello client!

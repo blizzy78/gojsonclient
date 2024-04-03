@@ -1,4 +1,4 @@
-package gojsonclient
+package gojsonclient_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/blizzy78/gojsonclient"
 	"github.com/go-json-experiment/json"
 )
 
@@ -29,13 +30,15 @@ func Example() {
 
 	defer server.Close()
 
-	client := New()
+	client := gojsonclient.New()
 
-	req := NewRequest[*request, *response](server.URL+"/foo", http.MethodGet, &request{
-		Message: "client",
-	})
+	req := gojsonclient.NewRequest[*request, *response](
+		server.URL+"/foo",
+		http.MethodGet,
+		&request{Message: "client"},
+	)
 
-	res, _ := Do(context.Background(), client, req)
+	res, _ := gojsonclient.Do(context.Background(), client, req)
 	fmt.Println(res.Res.Reply)
 
 	// Output: Hello client!
