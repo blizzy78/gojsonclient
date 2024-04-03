@@ -1,5 +1,3 @@
-github.com/blizzy78/gobackoff v0.1.0 h1:UtKLVphYHwPmXgzT/FKKKe+i8mA6pjOV9oBAPLeWq5k=
-github.com/blizzy78/gobackoff v0.1.0/go.mod h1:6Zn9hKAy29C9XmOBYywiMGkGMIUZ1/V7EGhsyfSxLNQ=
 github.com/blizzy78/gobackoff v0.2.0 h1:/8MIzHapIa45xlqgrNlRfN7U4b0cmNQqdTDm/T3ZaLU=
 github.com/blizzy78/gobackoff v0.2.0/go.mod h1:RyNJ81BxAYTtkGCmaRgzf9P+TpQSyM9TmtKtHVv+KjM=
 github.com/go-json-experiment/json v0.0.0-20231102232822-2e55bd4e08b0 h1:ymLjT4f35nQbASLnvxEde4XOBL+Sn7rFuV+FOJqkljg=
